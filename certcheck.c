@@ -50,6 +50,21 @@ main(int argc, char *argv[])
     certificate_bio = BIO_new(BIO_s_file());
 
 
+     // Read certificate into BIO
+    if (!(BIO_read_filename(certificate_bio, test_cert_example))) {
+        fprintf(stderr, "Error in reading cert BIO filename");
+        exit(EXIT_FAILURE);
+    }
+
+    // Reading the PEM file
+    if (!(cert = PEM_read_bio_X509(certificate_bio, NULL, 0, NULL))){
+        fprintf(stderr, "Error in loading certificate");
+        exit(EXIT_FAILURE);
+    }
+
+
+    // Reading the CSV File
+
 
 
     return 0;
