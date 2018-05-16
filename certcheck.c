@@ -47,7 +47,7 @@ typedef struct {
 // ---------------------------------------------------------------------- 
 // Function Declarations
 void read_file(char* path, cert_t* data, data_info_t* data_info);
-void expand_array(data_info_t* info, cert_t* data);
+void expand_array(data_info_t* info, cert_t** data);
 void validate_cert(cert_t* data, int i);
 int validate_ca(X509_NAME name, cert_t *data, int i);
 
@@ -86,6 +86,10 @@ main(int argc, char *argv[])
     // ------------------------------------------------------------------
     // Exporting it to the outputc CSV file
 
+
+
+    // Freeing the data after 
+    free(data);
     return 0;
 }
 
@@ -106,7 +110,6 @@ read_file(char* path, cert_t* data, data_info_t* data_info) {
 
     // Predefining variables used
     const char comma[2] = ",";
-    char* cell;
 
     // Opening the file
     FILE *fp = fopen(path, "r");
@@ -118,16 +121,21 @@ read_file(char* path, cert_t* data, data_info_t* data_info) {
 
         // Reading each line of the CSV File
         while(fgets(line, sizeof(line), fp) != NULL) {
-            
+            printf("AAAAAAAAAA\n");
             // Check if the array has enough memory allocated to it
-            expand_array(data_info, data);
-
+            expand_array(data_info, &data);
+            printf("BBBBBBBBBB\n");
             // Get content of cells and parse them into the struct
-            (data[(data_info->current_size)]).file_path = strtok(line, comma);
-            (data[(data_info->current_size)]).url = strtok(NULL, comma);
+            data[(data_info->current_size)].file_path = strtok(line, comma);
+            data[(data_info->current_size)].url = strtok(NULL, comma);
+
+            printf("%s\n", data[(data_info->current_size)].file_path);
+            printf("%s\n", data[(data_info->current_size)].url);
 
             // Update the details of the struct 
             data_info->current_size++;
+            printf("current_size: %d\n", (data_info->current_size));
+
         } 
     }
     
@@ -145,18 +153,19 @@ read_file(char* path, cert_t* data, data_info_t* data_info) {
  * data: The actual data struct array to realloc
  */
 void
-expand_array(data_info_t* info, cert_t* data) {
+expand_array(data_info_t* info, cert_t** data) {
 
     // Perform size checking
-    if((info->current_size) >= (info->max_size)) {
+    if((info->current_size) == (info->max_size)) {
         // Expand the size by two
         info->max_size = info->max_size * 2;
-        printf("%d\n", (info->max_size));
-        // Reallocate size of array in accordance to length
-        data = realloc(data, ((info->max_size) * sizeof(cert_t)));
+        printf("max_size: %d\n", (info->max_size));
         
+        // Reallocate size of array in accordance to length
+        *data = realloc(*data, info->max_size * sizeof(cert_t));
+
         // Error Handling
-        if(!data) {
+        if(!(*data)) {
             perror("ERROR reallocation of memory to data array");
             exit(1);
         } 
@@ -292,13 +301,13 @@ validate_ca(X509_NAME name,cert_t *data, int i) {
         return 1;
     }
 
-    return 0;
     */
+    return 0;
 }
 
 
 
 int
 validate_san(){
-
+    return 0;
 }
