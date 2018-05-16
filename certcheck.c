@@ -19,6 +19,7 @@
 #include <openssl/pem.h>
 #include <openssl/err.h>
 #include <time.h>
+#include <fnmatch.h>
 
 // Importation of header files 
 
@@ -48,6 +49,7 @@ typedef struct {
 void read_file(char* path, cert_t* data, data_info_t* data_info);
 void expand_array(data_info_t* info, cert_t* data);
 void validate_cert(cert_t* data, int i);
+int validate_ca(X509_NAME name, cert_t *data, int i);
 
 // ----------------------------------------------------------------------
 /* Main Function
@@ -77,7 +79,8 @@ main(int argc, char *argv[])
 
     // Loop through struct
     for(i=0;i<(data_info.current_size);i++) {
-
+        // Validate each certificate
+        validate_cert(data, i);
     }
 
     // ------------------------------------------------------------------
@@ -148,9 +151,9 @@ expand_array(data_info_t* info, cert_t* data) {
     if((info->current_size) >= (info->max_size)) {
         // Expand the size by two
         info->max_size = info->max_size * 2;
-
+        printf("%d\n", (info->max_size));
         // Reallocate size of array in accordance to length
-        data = realloc(data, info->max_size * sizeof(data));
+        data = realloc(data, ((info->max_size) * sizeof(cert_t));
         
         // Error Handling
         if(!data) {
@@ -225,11 +228,18 @@ validate_cert(cert_t* data, int i) {
         exit(EXIT_FAILURE);
     }
 
+    // Initialising Certificate Subject Name
+    if (!(X509_get_subject_name(cert))) {
+        // Handle errors
+        fprintf(stderr, "Error in reading certificate subject name");
+        exit(EXIT_FAILURE);
+    }
+
 
 
     // Printing certificate information for debugging
-    print_bio = BIO_new_fp(stdout, BIO_NOCLOSE)
-    x509_print_ex(, cert, XN_FLAG_COMPAT, X509_FLAG_COMPAT)
+    //print_bio = BIO_new_fp(stdout, BIO_NOCLOSE);
+    //x509_print_ex(, cert, XN_FLAG_COMPAT, X509_FLAG_COMPAT);
 
 
 }
@@ -252,21 +262,43 @@ validate_period(X509 *cert) {
     time_t time_now = time(NULL);
 
     // Check if current time is in range
-    return ((time_now > not_before) && (time_now < not_after));
+    //return ((time_now > not_before) && (time_now < not_after));
+    return 0;
 }
 
 
 /* Validate the Domain Name in Common Name
  * ---------------------------------------
  * cert: The certificate to validate the domain of 
+ * name: The name of the certificate 
  * url: The string type of
+ * i: The index of the current cert that is being validated
  *
  * return: Value of 1 if check was successful or 0 if not 
  */
 int 
-validate_domain(X509 *cert, ) {
+validate_ca(X509_NAME name,cert_t *data, int i) {
+
+    /* Wild Card Handling */ 
 
 
+    /*
+    // Matching the Domain Names
+    const char* url = data[i].url;
+
+    // strcmp to compare exact match
+    // fnmatch to compare wildcard matches
+    if(!(strcmp(name, url)) && !(fnmatch(url, name, 0))) {
+        return 1;
+    }
 
     return 0;
+    */
+}
+
+
+
+int
+validate_san(){
+
 }

@@ -13,7 +13,7 @@ EXE = certcheck
 OBJ = certcheck.c
 
 $(EXE): $(OBJ)
-	$(CC) -o $(EXE) $(OBJ) $(CFLAGS)
+	$(CC) -o $(EXE) $(OBJ) $(CFLAGS) 
 
 clean: rm -f $(EXE)
 
