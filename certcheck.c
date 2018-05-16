@@ -153,7 +153,7 @@ expand_array(data_info_t* info, cert_t* data) {
         info->max_size = info->max_size * 2;
         printf("%d\n", (info->max_size));
         // Reallocate size of array in accordance to length
-        data = realloc(data, ((info->max_size) * sizeof(cert_t));
+        data = realloc(data, ((info->max_size) * sizeof(cert_t)));
         
         // Error Handling
         if(!data) {
