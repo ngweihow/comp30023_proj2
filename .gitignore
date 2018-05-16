@@ -1,3 +1,4 @@
 certcheck
 cert-file2.pem
 sample_certs/
+*.o

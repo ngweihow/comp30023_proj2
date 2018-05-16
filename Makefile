@@ -10,12 +10,13 @@
 CC = gcc
 CFLAGS = -Wall -lssl -lcrypto
 EXE = certcheck
-OBJ = certcheck.c
+OBJ = certcheck.o
 
 $(EXE): $(OBJ)
 	$(CC) -o $(EXE) $(OBJ) $(CFLAGS) 
 
-clean: rm -f $(EXE)
+clean: 
+	rm $(OBJ) $(EXE)
 
 
 scp:
