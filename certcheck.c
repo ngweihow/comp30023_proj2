@@ -26,7 +26,7 @@
 
 // Definitions
 #define MAX_LINE_LENGTH 128
-#define MIN_SIZE 2
+#define MIN_SIZE 10
 
 // ----------------------------------------------------------------------
 // Definition of Structs
@@ -46,9 +46,10 @@ typedef struct {
 
 // ---------------------------------------------------------------------- 
 // Function Declarations
-void read_file(char* path, cert_t* data, data_info_t* data_info);
+cert_t* read_file(char* path, cert_t* data, data_info_t* data_info);
 void expand_array(data_info_t* info, cert_t** data);
 void validate_cert(cert_t* data, int i);
+int validate_period(X509 *cert);
 int validate_ca(X509_NAME name, cert_t *data, int i);
 
 // ----------------------------------------------------------------------
@@ -71,15 +72,15 @@ main(int argc, char *argv[])
 
 
     // Parsing the CSV File
-    read_file(argv[1], data, &data_info);
-
+    data = read_file(argv[1], data, &data_info);
+    printf("%s\n", data[0].file_path);
 
     // ------------------------------------------------------------------
     // Validating each certificate
 
     // Loop through struct
     for(i=0;i<(data_info.current_size);i++) {
-        // Validate each certificate
+        // Validate each certificate        
         validate_cert(data, i);
     }
 
@@ -105,7 +106,7 @@ main(int argc, char *argv[])
  * data: The data struct for storing the contents of the csv
  * data_len: The current length of the data struct array
  */
-void 
+cert_t*
 read_file(char* path, cert_t* data, data_info_t* data_info) {
 
     // Predefining variables used
@@ -124,10 +125,14 @@ read_file(char* path, cert_t* data, data_info_t* data_info) {
             printf("AAAAAAAAAA\n");
             // Check if the array has enough memory allocated to it
             expand_array(data_info, &data);
+
             printf("BBBBBBBBBB\n");
-            // Get content of cells and parse them into the struct
-            data[(data_info->current_size)].file_path = strtok(line, comma);
-            data[(data_info->current_size)].url = strtok(NULL, comma);
+
+            //data[(data_info->current_size)].file_path = strtok(line, comma);
+            //data[(data_info->current_size)].url = strtok(NULL, comma);
+
+            data[(data_info->current_size)].file_path = strdup(strtok(line, comma));
+            data[(data_info->current_size)].url = strdup(strtok(NULL, comma));
 
             printf("%s\n", data[(data_info->current_size)].file_path);
             printf("%s\n", data[(data_info->current_size)].url);
@@ -135,15 +140,17 @@ read_file(char* path, cert_t* data, data_info_t* data_info) {
             // Update the details of the struct 
             data_info->current_size++;
             printf("current_size: %d\n", (data_info->current_size));
+            printf("%s\n", data[0].file_path);
 
         } 
     }
-    
     // Handle Errors
     else {
         perror("ERROR reading from file");
         exit(1);
     } 
+
+    return data;
 
 }
 
@@ -203,6 +210,10 @@ concat(char* s1, char* s2) {
 void
 validate_cert(cert_t* data, int i) {
 
+    printf("i value %d\n", i);
+    printf("%s\n", data[i].file_path);
+    printf("sfdsfsfsfsd\n");
+    fflush(stdout);
     char* path = data[i].file_path;
     char* url = data[i].url;
 
@@ -220,7 +231,7 @@ validate_cert(cert_t* data, int i) {
     ERR_load_crypto_strings();
 
     // Create BIO object to read certificate
-    certificate_bio = BIO_new(BIO_s_file());
+        certificate_bio = BIO_new(BIO_s_file());
 
 
      // Read certificate into BIO
@@ -245,6 +256,8 @@ validate_cert(cert_t* data, int i) {
     }
 
 
+    // Validation of periods
+    validate_period(cert);
 
     // Printing certificate information for debugging
     //print_bio = BIO_new_fp(stdout, BIO_NOCLOSE);
@@ -267,12 +280,28 @@ validate_period(X509 *cert) {
     ASN1_TIME *not_before = X509_get_notBefore(cert);
     ASN1_TIME *not_after = X509_get_notAfter(cert);
 
-    // Getting the current time
-    time_t time_now = time(NULL);
+    int day, sec;
 
-    // Check if current time is in range
-    //return ((time_now > not_before) && (time_now < not_after));
-    return 0;
+    // Checking the time difference between the two times
+
+    int after_val = 0, before_val = 0;
+
+    // Check if the certificate time is not after
+    if(ASN1_TIME_diff(&day, &sec, NULL, not_after)) {
+        // Valid if difference in time are the same or negative
+        if (day <= 0 || sec <= 0)
+            after_val = 1;
+    }
+
+    // Check if the certificate time is not before
+    if(ASN1_TIME_diff(&day, &sec, NULL, not_before)) {
+        // Valid if difference in time are the same or positive
+        if(day >= 0 || sec >= 0)
+            before_val = 1;
+    }
+
+    // Return validity of before and after
+    return (after_val && before_val);
 }
 
 
@@ -287,11 +316,8 @@ validate_period(X509 *cert) {
  */
 int 
 validate_ca(X509_NAME name,cert_t *data, int i) {
-
-    /* Wild Card Handling */ 
-
-
     /*
+
     // Matching the Domain Names
     const char* url = data[i].url;
 
@@ -300,7 +326,6 @@ validate_ca(X509_NAME name,cert_t *data, int i) {
     if(!(strcmp(name, url)) && !(fnmatch(url, name, 0))) {
         return 1;
     }
-
     */
     return 0;
 }
@@ -325,12 +350,12 @@ validate_san(){
  * n: The length of the array structure. 
  */
 void
-export_csv(cert_c* data, int n) {
-
+export_csv(cert_t* data, int n) {
+    /*
     // Handling the file operations
     int i;
     const char* filename = "sample_output.csv"; 
-    FILE *fp = fopen(path, "w+");
+    FILE *fp = fopen(filename, "w+");
 
 
     // Loop through everything and print it out to the csv
@@ -342,4 +367,5 @@ export_csv(cert_c* data, int n) {
 
     // Close the CSV File
     fclose(fp);
+    */
 }
