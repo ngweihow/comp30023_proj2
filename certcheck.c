@@ -18,6 +18,7 @@
 #include <openssl/bio.h>
 #include <openssl/pem.h>
 #include <openssl/err.h>
+#include <openssl/rsa.h>
 #include <time.h>
 #include <fnmatch.h>
 
@@ -30,6 +31,7 @@
 #define MIN_SIZE 10
 #define INVALID 0
 #define VALID 1
+#define MIN_RSA_LEN 2048
 
 // ----------------------------------------------------------------------
 // Definition of Structs
@@ -204,7 +206,7 @@ validate_cert(cert_t* data, int i) {
     ERR_load_crypto_strings();
 
     // Create BIO object to read certificate
-        certificate_bio = BIO_new(BIO_s_file());
+    certificate_bio = BIO_new(BIO_s_file());
 
 
      // Read certificate into BIO
@@ -348,8 +350,71 @@ validate_ca(X509* cert,cert_t *data, int i) {
  */
 int
 validate_san(X509* cert,cert_t *data, int i){
+    
+    
+    int san_loc = -1; 
+
+    // Matching the Domain Names
+    const char* url = data[i].url;
+
+    // Get list of all SAN extensions
+    STACK_OF(X509_EXTENSION)* ext_list = NULL;
+    ext_list = X509_get_ext(cert, san_loc);
+
+    // Validating that the ext_list is not empty
+    if(!ext_list) {
+        // Handle errors
+        fprintf(stderr, "Error in reading certificate san extensions");
+        exit(EXIT_FAILURE);
+    }
+
+    // Finding NID extension
+    san_loc = X509_get_index_by_NID(name, NID_commonName, -1);
+    if(san_loc < 0) {
+        return 0;
+    }
+
+
+
+
+
+
+
+
     return 0;
 }
+
+
+/* RSA Key Length Validation
+ * -------------------------
+ * cert: The certificate to validate the domain of 
+ * data: The data struct for storing the contents of the csv
+ *
+ * return: Value of 1 if check was successful or 0 if not 
+ */
+int
+validate_rsa_length(X509* cert,cert_t *data) {
+
+    // Getting the public key from the certificate
+    EVP_PKEY* pkey = X509_get_pubkey(cert);
+    if(!pkey && (EVP_PKEY_RSA == pkey->type)) {
+        // Handle errors
+        fprintf(stderr, "Error in reading public key from cert");
+        exit(EXIT_FAILURE);
+    }
+
+    // Getting the RSA key and its length in bytes
+    RSA *rsa_key = EVP_PKEY_get1_RSA(pkey);
+    int pkey_length = RSA_size(rsa_key);
+
+    // Convert bytes to bits and check
+    if((pkey_length * 8) >= MIN_RSA_LEN) {
+        return 1;
+    }
+
+    return 0;
+}
+
 
 
 
