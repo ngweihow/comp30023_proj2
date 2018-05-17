@@ -340,11 +340,14 @@ validate_ca(X509* cert,cert_t *data, int i) {
 
 /* Validate the Subject Alternative Name extension
  * -----------------------------------------------
- * 
+ * cert: The certificate to validate the domain of 
+ * data: The data struct for storing the contents of the csv
+ * i: The index of the current cert that is being validated
  *
+ * return: Value of 1 if check was successful or 0 if not 
  */
 int
-validate_san(){
+validate_san(X509* cert,cert_t *data, int i){
     return 0;
 }
 
