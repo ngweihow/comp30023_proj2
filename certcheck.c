@@ -25,8 +25,11 @@
 
 
 // Definitions
+#define _GNU_SOURCE
 #define MAX_LINE_LENGTH 128
 #define MIN_SIZE 10
+#define INVALID 0
+#define VALID 1
 
 // ----------------------------------------------------------------------
 // Definition of Structs
@@ -50,8 +53,8 @@ cert_t* read_file(char* path, cert_t* data, data_info_t* data_info);
 void expand_array(data_info_t* info, cert_t** data);
 void validate_cert(cert_t* data, int i);
 int validate_period(X509 *cert);
-int validate_ca(X509_NAME name, cert_t *data, int i);
-
+int validate_ca(X509* cert, cert_t *data, int i);
+void debug(cert_t* data, int n);
 // ----------------------------------------------------------------------
 /* Main Function
  *
@@ -65,16 +68,13 @@ main(int argc, char *argv[])
     // ------------------------------------------------------------------
     // Initialising data struct and info struct for it
     cert_t *data = malloc(MIN_SIZE * sizeof(cert_t));
-
     data_info_t data_info;
     data_info.current_size = 0;
     data_info.max_size = MIN_SIZE;
 
-
     // Parsing the CSV File
     data = read_file(argv[1], data, &data_info);
-    printf("%s\n", data[0].file_path);
-
+    debug(data, data_info.current_size);
     // ------------------------------------------------------------------
     // Validating each certificate
 
@@ -90,7 +90,13 @@ main(int argc, char *argv[])
 
 
     // Freeing the data after 
+    for(i=0;i<(data_info.current_size);i++) {
+        // Free each individual certificate struct      
+        free(data[i].file_path);
+        free(data[i].url);
+    }
     free(data);
+
     return 0;
 }
 
@@ -122,26 +128,20 @@ read_file(char* path, cert_t* data, data_info_t* data_info) {
 
         // Reading each line of the CSV File
         while(fgets(line, sizeof(line), fp) != NULL) {
-            printf("AAAAAAAAAA\n");
+
             // Check if the array has enough memory allocated to it
             expand_array(data_info, &data);
 
-            printf("BBBBBBBBBB\n");
-
-            //data[(data_info->current_size)].file_path = strtok(line, comma);
-            //data[(data_info->current_size)].url = strtok(NULL, comma);
-
+            // Copy the string into each cert_t in the struct
             data[(data_info->current_size)].file_path = strdup(strtok(line, comma));
             data[(data_info->current_size)].url = strdup(strtok(NULL, comma));
+            data[(data_info->current_size)].validate = INVALID;
 
-            printf("%s\n", data[(data_info->current_size)].file_path);
-            printf("%s\n", data[(data_info->current_size)].url);
+            //printf("%s\n", data[(data_info->current_size)].file_path);
+            //printf("%s\n", data[(data_info->current_size)].url);
 
             // Update the details of the struct 
             data_info->current_size++;
-            printf("current_size: %d\n", (data_info->current_size));
-            printf("%s\n", data[0].file_path);
-
         } 
     }
     // Handle Errors
@@ -166,7 +166,6 @@ expand_array(data_info_t* info, cert_t** data) {
     if((info->current_size) == (info->max_size)) {
         // Expand the size by two
         info->max_size = info->max_size * 2;
-        printf("max_size: %d\n", (info->max_size));
         
         // Reallocate size of array in accordance to length
         *data = realloc(*data, info->max_size * sizeof(cert_t));
@@ -179,28 +178,6 @@ expand_array(data_info_t* info, cert_t** data) {
     }
 }
 
-/* Concatenate function to appending one string to another 
- * -------------------------------------------------------
- * s1: First String to be at the front.
- * s2: Second String to be at the back.
- *
- * return: Pointer to the concatenated string.
- */
-/*
-char*
-concat(char* s1, char* s2) {   
-    // Determine the length of the output and allocating memory for it.
-    int output_len = strlen(s1) + strlen(s2) + 1;
-    char* concat_str = malloc(output_len * sizeof(char));
-
-    // Copy the first string into the allocated return string.
-    strcpy(concat_str, s1);
-    // Concat the second on onto the allocated return string afterwards.
-    strcat(concat_str, s2);
-
-    return concat_str;
-}
-*/
 
 /* Validating each cert inside of the input CSV
  * --------------------------------------------
@@ -210,10 +187,6 @@ concat(char* s1, char* s2) {
 void
 validate_cert(cert_t* data, int i) {
 
-    printf("i value %d\n", i);
-    printf("%s\n", data[i].file_path);
-    printf("sfdsfsfsfsd\n");
-    fflush(stdout);
     char* path = data[i].file_path;
     char* url = data[i].url;
 
@@ -245,13 +218,6 @@ validate_cert(cert_t* data, int i) {
     if (!(cert = PEM_read_bio_X509(certificate_bio, NULL, 0, NULL))){
         // Handle errors
         fprintf(stderr, "Error in loading certificate");
-        exit(EXIT_FAILURE);
-    }
-
-    // Initialising Certificate Subject Name
-    if (!(X509_get_subject_name(cert))) {
-        // Handle errors
-        fprintf(stderr, "Error in reading certificate subject name");
         exit(EXIT_FAILURE);
     }
 
@@ -289,14 +255,14 @@ validate_period(X509 *cert) {
     // Check if the certificate time is not after
     if(ASN1_TIME_diff(&day, &sec, NULL, not_after)) {
         // Valid if difference in time are the same or negative
-        if (day <= 0 || sec <= 0)
+        if (day <= 0 && sec <= 0)
             after_val = 1;
     }
 
     // Check if the certificate time is not before
     if(ASN1_TIME_diff(&day, &sec, NULL, not_before)) {
         // Valid if difference in time are the same or positive
-        if(day >= 0 || sec >= 0)
+        if(day >= 0 && sec >= 0)
             before_val = 1;
     }
 
@@ -308,25 +274,66 @@ validate_period(X509 *cert) {
 /* Validate the Domain Name in Common Name
  * ---------------------------------------
  * cert: The certificate to validate the domain of 
- * name: The name of the certificate 
- * url: The string type of
+ * data: The data struct for storing the contents of the csv
  * i: The index of the current cert that is being validated
  *
  * return: Value of 1 if check was successful or 0 if not 
  */
 int 
-validate_ca(X509_NAME name,cert_t *data, int i) {
-    /*
+validate_ca(X509* cert,cert_t *data, int i) {
 
     // Matching the Domain Names
     const char* url = data[i].url;
 
+    // Common Names     
+    X509_NAME_ENTRY* cn_entry = NULL;
+    ASN1_STRING* cn_asn1 = NULL;
+    char* common_name = NULL;
+    X509_NAME* name = X509_get_subject_name(cert);
+    int common_name_loc = -1;
+
+    // Initialising Certificate Subject Name
+    if(!name) {
+        // Handle errors
+        fprintf(stderr, "Error in reading certificate subject name");
+        exit(EXIT_FAILURE);
+    }
+
+
+    // Find position of the CN in the Subject Name of the certificate
+    common_name_loc = X509_NAME_get_index_by_NID(name, NID_commonName, -1);
+    if(common_name_loc < 0) {
+        // Handle errors
+        fprintf(stderr, "Error in finding position of common name");
+        exit(EXIT_FAILURE);
+    }
+
+    // Extract the CN field
+    cn_entry = X509_NAME_get_entry(name, common_name_loc);
+    if(!cn_entry) {
+        // Handle errors
+        fprintf(stderr, "Error in extracting common name");
+        exit(EXIT_FAILURE);
+    }
+
+    // Convert the common name to a C string
+    cn_asn1 = X509_NAME_ENTRY_get_data(cn_entry);
+    if(!cn_asn1) {
+        // Handle errors
+        fprintf(stderr, "Error in extracting common name");
+        exit(EXIT_FAILURE);
+    }           
+
+    // Convert the Common Name from asn1 string to C string
+    common_name = (char *) ASN1_STRING_data(cn_asn1);
+
+
     // strcmp to compare exact match
     // fnmatch to compare wildcard matches
-    if(!(strcmp(name, url)) && !(fnmatch(url, name, 0))) {
+    if(!(strcmp(common_name, url)) && !(fnmatch(url, common_name, 0))) {
         return 1;
     }
-    */
+    
     return 0;
 }
 
@@ -351,7 +358,7 @@ validate_san(){
  */
 void
 export_csv(cert_t* data, int n) {
-    /*
+
     // Handling the file operations
     int i;
     const char* filename = "sample_output.csv"; 
@@ -362,10 +369,26 @@ export_csv(cert_t* data, int n) {
     for(i=0;i<n;i++) {
         // Printing each value into a row in the csv
         fprintf(fp, "%s,%s,%d\n", 
-            data[i]->file_path, data[i]->url, data[i]->validate);
+            data[i].file_path, data[i].url, data[i].validate);
     }
 
     // Close the CSV File
-    fclose(fp);
-    */
+    fclose(fp); 
+}
+
+/* Debug function to print out the struct array
+ * --------------------------------------------
+ * data: The data struct for storing the contents of the csv.
+ * n: The length of the array structure. 
+ */
+void
+debug(cert_t* data, int n) {
+    int i;
+
+    // Loop through everything and print it out to the csv
+    for(i=0;i<n;i++) {
+        // Printing each value into a row in the csv
+        printf("path: %s\nurl: %s\nvalid: %d\n", 
+            data[i].file_path, data[i].url, data[i].validate);
+    }
 }
