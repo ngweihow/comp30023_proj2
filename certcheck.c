@@ -306,8 +306,40 @@ validate_ca(X509_NAME name,cert_t *data, int i) {
 }
 
 
-
+/* Validate the Subject Alternative Name extension
+ * -----------------------------------------------
+ * 
+ *
+ */
 int
 validate_san(){
     return 0;
+}
+
+
+
+
+/* Export to the export CSV File
+ * -----------------------------
+ * data: The data struct for storing the contents of the csv.
+ * n: The length of the array structure. 
+ */
+void
+export_csv(cert_c* data, int n) {
+
+    // Handling the file operations
+    int i;
+    const char* filename = "sample_output.csv"; 
+    FILE *fp = fopen(path, "w+");
+
+
+    // Loop through everything and print it out to the csv
+    for(i=0;i<n;i++) {
+        // Printing each value into a row in the csv
+        fprintf(fp, "%s,%s,%d\n", 
+            data[i]->file_path, data[i]->url, data[i]->validate);
+    }
+
+    // Close the CSV File
+    fclose(fp);
 }
