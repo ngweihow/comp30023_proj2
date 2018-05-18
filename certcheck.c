@@ -56,6 +56,8 @@ void expand_array(data_info_t* info, cert_t** data);
 void validate_cert(cert_t* data, int i);
 int validate_period(X509 *cert);
 int validate_ca(X509* cert, cert_t *data, int i);
+int validate_san(X509* cert,cert_t *data, int i);
+int validate_key_usage(X509* cert,cert_t *data);
 void debug(cert_t* data, int n);
 // ----------------------------------------------------------------------
 /* Main Function
@@ -234,6 +236,10 @@ validate_cert(cert_t* data, int i) {
 
 }
 
+// ----------------------------------------------------------------------
+/* Time Validations
+ *
+ */
 
 /* Validate Period of Certificate 
  * ------------------------------
@@ -271,6 +277,11 @@ validate_period(X509 *cert) {
     // Return validity of before and after
     return (after_val && before_val);
 }
+
+// ----------------------------------------------------------------------
+/* Name Validations
+ *
+ */
 
 
 /* Validate the Domain Name in Common Name
@@ -349,7 +360,7 @@ validate_ca(X509* cert,cert_t *data, int i) {
  * return: Value of 1 if check was successful or 0 if not 
  */
 int
-validate_san(X509* cert,cert_t *data, int i){
+validate_san(X509* cert,cert_t *data, int i) {
     
     
     int san_loc = -1; 
@@ -384,6 +395,10 @@ validate_san(X509* cert,cert_t *data, int i){
     return 0;
 }
 
+// ----------------------------------------------------------------------
+/* Key Validations
+ *
+ */
 
 /* RSA Key Length Validation
  * -------------------------
@@ -412,9 +427,31 @@ validate_rsa_length(X509* cert,cert_t *data) {
         return 1;
     }
 
+    RSA_free(rsa_key);
+
     return 0;
 }
 
+/* Validation of Key Usage and constraints
+ * ---------------------------------------
+ * cert: The certificate to validate the domain of 
+ * data: The data struct for storing the contents of the csv
+ *
+ * return: Value of 1 if check was successful or 0 if not 
+ */
+int
+validate_key_usage(X509* cert,cert_t *data) {
+
+    // Constraints and Usage checks
+    const char* basic_con = "CA:FALSE";
+    const char* enhanced_use = "TLS Web Server Authentication";
+
+    // Check each key and their match their usage
+
+    
+
+    return 0;
+}
 
 
 
