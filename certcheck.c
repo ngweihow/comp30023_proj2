@@ -26,7 +26,6 @@
 
 
 // Definitions
-#define _GNU_SOURCE
 #define MAX_LINE_LENGTH 128
 #define MIN_SIZE 10
 #define INVALID 0
@@ -158,7 +157,6 @@ read_file(char* path, cert_t* data, data_info_t* data_info) {
     } 
 
     return data;
-
 }
 
 /* Helper function to realloc space for the struct array
@@ -379,7 +377,8 @@ validate_ca(X509* cert, const char* url) {
     
     // strcmp to compare exact match
     // fnmatch to compare wildcard matches
-    if(!(strcmp(common_name, url)) && !(fnmatch(common_name, url, FNM_PERIOD))) {
+    if(!(strcmp(common_name, url)) ||
+        !(fnmatch(common_name, url, 0))) {
         return 1;
     }
     
@@ -419,20 +418,29 @@ validate_san(X509* cert, const char* url) {
         const GENERAL_NAME* san_name = sk_GENERAL_NAME_value(san_list, i);
         if(!san_name) {
             // Invalid SAN            
-            return 0;
+            break;
         }
 
-        // Once valid, convert to C string
-        char* san_string = (char* ) ASN1_STRING_data(san_name);
+        // Check if it is a DNS name
+        if(san_name->type == GEN_DNS) {
+            // Once valid, convert to C string
+            char* san_string = (char* ) ASN1_STRING_data(san_name->d.dNSName);
 
-        printf("SAN %s\n", san_string);
-        printf("url %s\n", url);
+            printf("SAN %s\n", san_string);
+            printf("url %s\n\n", url);
 
-        // Check if it matches url and wildcard matching
-        if(!(strcmp(san_string, url)) &&
-            !(fnmatch(san_string, url, FNM_PERIOD))) {
-            // Return 1 if matched
-            return 1;
+            // Break if nullbyte found in DNS
+            if(strlen(san_string) != ASN1_STRING_length(san_name->d.dNSName)) {
+                break;
+            }
+
+            // Check if it matches url and wildcard matching
+            if(!(strcmp(san_string, url)) ||
+                !(fnmatch(san_string, url, 0))) {
+                printf("MATCH\n");
+                // Return 1 if matched
+                return 1;
+            }
         }
     }
 
@@ -493,6 +501,18 @@ validate_key_usage(X509* cert,cert_t *data) {
     const char* enhanced_use = "TLS Web Server Authentication";
 
     // Check the key and their match their usage
+
+    // Get Key usage
+    X509_EXTENSION* ext = NULL;
+    ext = X509_get_ext_d2i(cert, NID_key_usage, NULL, NULL);
+    
+    if(!ext) {
+        // Handle errors
+        fprintf(stderr, "Error in getting key usage");
+        exit(EXIT_FAILURE);
+    }
+
+
 
 
 
