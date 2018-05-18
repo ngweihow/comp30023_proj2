@@ -55,8 +55,9 @@ cert_t* read_file(char* path, cert_t* data, data_info_t* data_info);
 void expand_array(data_info_t* info, cert_t** data);
 void validate_cert(cert_t* data, int i);
 int validate_period(X509 *cert);
-int validate_ca(X509* cert, cert_t *data, int i);
-int validate_san(X509* cert,cert_t *data, int i);
+int validate_names (X509* cert, const char* url);
+int validate_ca(X509* cert, const char* url);
+int validate_san(X509* cert, const char* url);
 int validate_rsa_length(X509* cert,cert_t *data);
 int validate_key_usage(X509* cert,cert_t *data);
 void debug(cert_t* data, int n);
@@ -228,15 +229,15 @@ validate_cert(cert_t* data, int i) {
     }
 
     // Validity Variables
-    int period, ca, san, rsa, key_con;
+    int period, names, rsa, key_con;
 
     // Validations
     period = validate_period(cert);
-    ca = validate_ca(cert, data, i);
     rsa = validate_rsa_length(cert, data);
+    names = validate_names(cert, data[i].url);
 
     // If all validates to true, mark the cert as valid
-    if(period * ca * rsa) {
+    if(period * names * rsa) {
         data[i].validate = VALID;
     }
 
@@ -294,20 +295,44 @@ validate_period(X509 *cert) {
  *
  */
 
+/* Validate the All Names with the given URL 
+ * -----------------------------------------
+ * cert: The certificate to validate the domain of 
+ * url: The url described for this certificate in the CSV
+ *
+ * return: Value of 1 if check was successful or 0 if not 
+ */
+int
+validate_names (X509* cert, const char* url) {
+    
+    // Check if Common Name is valid
+    if(validate_ca(cert, url)) {
+        printf("san returns %d\n", validate_san(cert, url));
+        return 1;
+    }
+
+    // Else check for any valid Subject Alternative Names
+    else if(validate_san(cert, url)){
+        return 1;
+    }
+
+    // Return 0 if no names are found
+    else {
+        return 0;
+    }
+
+}
+
 
 /* Validate the Domain Name in Common Name
  * ---------------------------------------
  * cert: The certificate to validate the domain of 
- * data: The data struct for storing the contents of the csv
- * i: The index of the current cert that is being validated
+ * url: The url described for this certificate in the CSV
  *
  * return: Value of 1 if check was successful or 0 if not 
  */
 int 
-validate_ca(X509* cert,cert_t *data, int i) {
-
-    // Matching the Domain Names
-    const char* url = data[i].url;
+validate_ca(X509* cert, const char* url) {
 
     // Common Names     
     X509_NAME_ENTRY* cn_entry = NULL;
@@ -365,44 +390,53 @@ validate_ca(X509* cert,cert_t *data, int i) {
 /* Validate the Subject Alternative Name extension
  * -----------------------------------------------
  * cert: The certificate to validate the domain of 
- * data: The data struct for storing the contents of the csv
- * i: The index of the current cert that is being validated
+ * url: The url described for this certificate in the CSV
  *
  * return: Value of 1 if check was successful or 0 if not 
  */
 int
-validate_san(X509* cert,cert_t *data, int i) {
+validate_san(X509* cert, const char* url) {
     
-    
-    int san_loc = -1; 
+    // Setting variables to help iterate through list of SAN
+    int i;
+    int san_n = -1; 
 
-    // Matching the Domain Names
-    const char* url = data[i].url;
+    // Get list of all Subject Alternative Names
+    STACK_OF(GENERAL_NAME)* san_list = NULL;
+    san_list = X509_get_ext_d2i(cert, NID_subject_alt_name, NULL, NULL);
+    san_n = sk_GENERAL_NAME_num(san_list);
 
-    // Get list of all SAN extensions
-    STACK_OF(X509_EXTENSION)* ext_list = NULL;
-    ext_list = X509_get_ext(cert, san_loc);
-
-    // Validating that the ext_list is not empty
-    if(!ext_list) {
-        // Handle errors
-        fprintf(stderr, "Error in reading certificate san extensions");
-        exit(EXIT_FAILURE);
-    }
-
-    /*
-    // Finding NID extension
-    san_loc = X509_get_index_by_NID(name, NID_commonName, -1);
-    if(san_loc < 0) {
+    // Validating that the san_list is not empty
+    if(!san_list) {
+        // Does not have SAN 
         return 0;
     }
-    */
 
+    // Loop through each SAN to compare
+    for(i=0;i<san_n;i++) {
 
+        // Match the SAN against the url
+        const GENERAL_NAME* san_name = sk_GENERAL_NAME_value(san_list, i);
+        if(!san_name) {
+            // Invalid SAN            
+            return 0;
+        }
 
+        // Once valid, convert to C string
+        char* san_string = (char* ) ASN1_STRING_data(san_name);
 
+        printf("SAN %s\n", san_string);
+        printf("url %s\n", url);
 
+        // Check if it matches url and wildcard matching
+        if(!(strcmp(san_string, url)) &&
+            !(fnmatch(san_string, url, FNM_PERIOD))) {
+            // Return 1 if matched
+            return 1;
+        }
+    }
 
+    printf("BBBBBBBBBBBBBBBBBB\n");
 
     return 0;
 }
@@ -414,7 +448,7 @@ validate_san(X509* cert,cert_t *data, int i) {
 
 /* RSA Key Length Validation
  * -------------------------
- * cert: The certificate to validate the domain of 
+ * cert: The certificate to validate the key's length of  
  * data: The data struct for storing the contents of the csv
  *
  * return: Value of 1 if check was successful or 0 if not 
@@ -446,7 +480,7 @@ validate_rsa_length(X509* cert,cert_t *data) {
 
 /* Validation of Key Usage and constraints
  * ---------------------------------------
- * cert: The certificate to validate the domain of 
+ * cert: The certificate to validate the key usage/constraints of 
  * data: The data struct for storing the contents of the csv
  *
  * return: Value of 1 if check was successful or 0 if not 
@@ -458,7 +492,7 @@ validate_key_usage(X509* cert,cert_t *data) {
     const char* basic_con = "CA:FALSE";
     const char* enhanced_use = "TLS Web Server Authentication";
 
-    // Check each key and their match their usage
+    // Check the key and their match their usage
 
 
 
@@ -505,7 +539,7 @@ debug(cert_t* data, int n) {
     // Loop through everything and print it out to the csv
     for(i=0;i<n;i++) {
         // Printing each value into a row in the csv
-        printf("path: %s\nurl: %s\nvalid: %d\n\n", 
-            data[i].file_path, data[i].url, data[i].validate);
+        printf("%d\npath: %s\nurl: %s\nvalid: %d\n\n", 
+            (i+1), data[i].file_path, data[i].url, data[i].validate);
     }
 }
