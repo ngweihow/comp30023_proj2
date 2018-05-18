@@ -501,17 +501,34 @@ validate_key_usage(X509* cert,cert_t *data) {
     const char* enhanced_use = "TLS Web Server Authentication";
 
     // Check the key and their match their usage
+    int ext_n = -1;
+    int i;
 
-    // Get Key usage
-    X509_EXTENSION* ext = NULL;
-    ext = X509_get_ext_d2i(cert, NID_key_usage, NULL, NULL);
-    
-    if(!ext) {
+    // Get Key usage stack
+    STACK_OF(X509_EXTENSION)* ext = NULL;
+    ext_list = X509_get_ext_d2i(cert, NID_key_usage, NULL, NULL);
+
+    if(!ext_list) {
         // Handle errors
         fprintf(stderr, "Error in getting key usage");
         exit(EXIT_FAILURE);
     }
 
+    // Get length of the list
+    ext_n = sk_X509_EXTENSION_num(ext_list);
+
+    // Loop through the list of extensions
+    for(i=0;i<ext_n;i++) {
+        // Get value of the current extension
+        const X509_EXTENSION curr_ext = sk_X509_EXTENSION_value(ex, i);
+
+        // Convert the value into a string
+        char* ext_string = (char* ) ASN1_STRING_data();
+
+        // Check for the key usages
+        
+
+    }
 
 
 
