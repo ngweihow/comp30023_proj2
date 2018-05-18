@@ -57,6 +57,7 @@ void validate_cert(cert_t* data, int i);
 int validate_period(X509 *cert);
 int validate_ca(X509* cert, cert_t *data, int i);
 int validate_san(X509* cert,cert_t *data, int i);
+int validate_rsa_length(X509* cert,cert_t *data);
 int validate_key_usage(X509* cert,cert_t *data);
 void debug(cert_t* data, int n);
 // ----------------------------------------------------------------------
@@ -78,7 +79,6 @@ main(int argc, char *argv[])
 
     // Parsing the CSV File
     data = read_file(argv[1], data, &data_info);
-    debug(data, data_info.current_size);
     // ------------------------------------------------------------------
     // Validating each certificate
 
@@ -87,6 +87,7 @@ main(int argc, char *argv[])
         // Validate each certificate        
         validate_cert(data, i);
     }
+    debug(data, data_info.current_size);
 
     // ------------------------------------------------------------------
     // Exporting it to the outputc CSV file
@@ -121,6 +122,7 @@ read_file(char* path, cert_t* data, data_info_t* data_info) {
 
     // Predefining variables used
     const char comma[2] = ",";
+    const char newline[2] = "\n";
 
     // Opening the file
     FILE *fp = fopen(path, "r");
@@ -138,7 +140,7 @@ read_file(char* path, cert_t* data, data_info_t* data_info) {
 
             // Copy the string into each cert_t in the struct
             data[(data_info->current_size)].file_path = strdup(strtok(line, comma));
-            data[(data_info->current_size)].url = strdup(strtok(NULL, comma));
+            data[(data_info->current_size)].url = strdup(strtok(NULL, newline));
             data[(data_info->current_size)].validate = INVALID;
 
             //printf("%s\n", data[(data_info->current_size)].file_path);
@@ -225,9 +227,18 @@ validate_cert(cert_t* data, int i) {
         exit(EXIT_FAILURE);
     }
 
+    // Validity Variables
+    int period, ca, san, rsa, key_con;
 
-    // Validation of periods
-    validate_period(cert);
+    // Validations
+    period = validate_period(cert);
+    ca = validate_ca(cert, data, i);
+    rsa = validate_rsa_length(cert, data);
+
+    // If all validates to true, mark the cert as valid
+    if(period * ca * rsa) {
+        data[i].validate = VALID;
+    }
 
     // Printing certificate information for debugging
     //print_bio = BIO_new_fp(stdout, BIO_NOCLOSE);
@@ -263,17 +274,17 @@ validate_period(X509 *cert) {
     // Check if the certificate time is not after
     if(ASN1_TIME_diff(&day, &sec, NULL, not_after)) {
         // Valid if difference in time are the same or negative
-        if (day <= 0 && sec <= 0)
+        if (day >= 0 && sec >= 0)
             after_val = 1;
     }
 
     // Check if the certificate time is not before
     if(ASN1_TIME_diff(&day, &sec, NULL, not_before)) {
         // Valid if difference in time are the same or positive
-        if(day >= 0 && sec >= 0)
+        if(day <= 0 && sec <= 0)
             before_val = 1;
     }
-
+   
     // Return validity of before and after
     return (after_val && before_val);
 }
@@ -340,10 +351,10 @@ validate_ca(X509* cert,cert_t *data, int i) {
     // Convert the Common Name from asn1 string to C string
     common_name = (char *) ASN1_STRING_data(cn_asn1);
 
-
+    
     // strcmp to compare exact match
     // fnmatch to compare wildcard matches
-    if(!(strcmp(common_name, url)) && !(fnmatch(url, common_name, 0))) {
+    if(!(strcmp(common_name, url)) && !(fnmatch(common_name, url, FNM_PERIOD))) {
         return 1;
     }
     
@@ -379,12 +390,13 @@ validate_san(X509* cert,cert_t *data, int i) {
         exit(EXIT_FAILURE);
     }
 
+    /*
     // Finding NID extension
     san_loc = X509_get_index_by_NID(name, NID_commonName, -1);
     if(san_loc < 0) {
         return 0;
     }
-
+    */
 
 
 
@@ -448,7 +460,7 @@ validate_key_usage(X509* cert,cert_t *data) {
 
     // Check each key and their match their usage
 
-    
+
 
     return 0;
 }
@@ -493,7 +505,7 @@ debug(cert_t* data, int n) {
     // Loop through everything and print it out to the csv
     for(i=0;i<n;i++) {
         // Printing each value into a row in the csv
-        printf("path: %s\nurl: %s\nvalid: %d\n", 
+        printf("path: %s\nurl: %s\nvalid: %d\n\n", 
             data[i].file_path, data[i].url, data[i].validate);
     }
 }
