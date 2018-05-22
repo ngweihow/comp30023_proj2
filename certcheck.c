@@ -57,10 +57,11 @@ int validate_period(X509 *cert);
 int validate_names (X509* cert, const char* url);
 int validate_ca(X509* cert, const char* url);
 int validate_san(X509* cert, const char* url);
-int validate_rsa_length(X509* cert,cert_t *data);
-int validate_key_usage(X509* cert,cert_t *data);
+int validate_rsa_length(X509* cert);
+int validate_key_usage_cons(X509* cert);
 int checking_ext(X509_EXTENSION *ex, const char* match_type);
 void debug(cert_t* data, int n);
+void export_csv(cert_t* data, int n);
 // ----------------------------------------------------------------------
 /* Main Function
  *
@@ -88,11 +89,11 @@ main(int argc, char *argv[])
         // Validate each certificate        
         validate_cert(data, i);
     }
-    debug(data, data_info.current_size);
+    //debug(data, data_info.current_size);
 
     // ------------------------------------------------------------------
     // Exporting it to the outputc CSV file
-
+    export_csv(data, data_info.current_size);
 
 
     // Freeing the data after 
@@ -143,9 +144,6 @@ read_file(char* path, cert_t* data, data_info_t* data_info) {
             data[(data_info->current_size)].file_path = strdup(strtok(line, comma));
             data[(data_info->current_size)].url = strdup(strtok(NULL, newline));
             data[(data_info->current_size)].validate = INVALID;
-
-            //printf("%s\n", data[(data_info->current_size)].file_path);
-            //printf("%s\n", data[(data_info->current_size)].url);
 
             // Update the details of the struct 
             data_info->current_size++;
@@ -229,9 +227,9 @@ validate_cert(cert_t* data, int i) {
 
     // Validations
     period = validate_period(cert);
-    rsa = validate_rsa_length(cert, data);
-    names = validate_names(cert, data[i].url);
-    key_con_usage = validate_key_usage(cert, data);
+    rsa = validate_rsa_length(cert);
+    names = validate_names(cert, url);
+    key_con_usage = validate_key_usage_cons(cert);
 
 
     // If all validates to true, mark the cert as valid
@@ -299,7 +297,6 @@ validate_names (X509* cert, const char* url) {
     
     // Check if Common Name is valid
     if(validate_ca(cert, url)) {
-        printf("san returns %d\n", validate_san(cert, url));
         return 1;
     }
 
@@ -420,25 +417,22 @@ validate_san(X509* cert, const char* url) {
             // Once valid, convert to C string
             char* san_string = (char* ) ASN1_STRING_data(san_name->d.dNSName);
 
-            printf("SAN %s\n", san_string);
-            printf("url %s\n\n", url);
-
             // Break if nullbyte found in DNS
-            if(strlen(san_string) != ASN1_STRING_length(san_name->d.dNSName)) {
+            if((strlen(san_string)) !=
+                (unsigned int) ASN1_STRING_length(san_name->d.dNSName)) {
+
                 break;
             }
 
             // Check if it matches url and wildcard matching
             if(!(strcmp(san_string, url)) ||
                 !(fnmatch(san_string, url, 0))) {
-                printf("MATCH\n");
+
                 // Return 1 if matched
                 return 1;
             }
         }
     }
-
-    printf("BBBBBBBBBBBBBBBBBB\n");
 
     return 0;
 }
@@ -456,7 +450,7 @@ validate_san(X509* cert, const char* url) {
  * return: Value of 1 if check was successful or 0 if not 
  */
 int
-validate_rsa_length(X509* cert,cert_t *data) {
+validate_rsa_length(X509* cert) {
 
     // Getting the public key from the certificate
     EVP_PKEY* pkey = X509_get_pubkey(cert);
@@ -483,12 +477,11 @@ validate_rsa_length(X509* cert,cert_t *data) {
 /* Validation of Key Usage and constraints
  * ---------------------------------------
  * cert: The certificate to validate the key usage/constraints of 
- * data: The data struct for storing the contents of the csv
  *
  * return: Value of 1 if check was successful or 0 if not 
  */
 int
-validate_key_usage(X509* cert,cert_t *data) {
+validate_key_usage_cons(X509* cert) {
 
 
     // Constraints and Usage checks
@@ -508,7 +501,7 @@ validate_key_usage(X509* cert,cert_t *data) {
     }
 
     constraint_ok = checking_ext(ex_bc, basic_con);
-    printf("CONSTRAINT %d\n", constraint_ok);
+
 
     // Check for Enhanced Key Usage ---------------------------------
      X509_EXTENSION *ex_eu = X509_get_ext(cert, 
@@ -521,7 +514,7 @@ validate_key_usage(X509* cert,cert_t *data) {
     }
 
     usage_ok = checking_ext(ex_eu, enhanced_use);
-    printf("USAGE %d\n", usage_ok);
+
 
     // Contraint not found
     return (constraint_ok && usage_ok);

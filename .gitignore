@@ -2,3 +2,4 @@ certcheck
 cert-file2.pem
 sample_certs/
 *.o
+sample_output.csv
