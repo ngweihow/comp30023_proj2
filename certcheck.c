@@ -59,6 +59,7 @@ int validate_ca(X509* cert, const char* url);
 int validate_san(X509* cert, const char* url);
 int validate_rsa_length(X509* cert,cert_t *data);
 int validate_key_usage(X509* cert,cert_t *data);
+int checking_ext(X509_EXTENSION *ex, const char* match_type);
 void debug(cert_t* data, int n);
 // ----------------------------------------------------------------------
 /* Main Function
@@ -199,9 +200,6 @@ validate_cert(cert_t* data, int i) {
     // Initialisation of the certificates 
     BIO *certificate_bio = NULL;
     X509 *cert = NULL;
-    X509_NAME *cert_issuer = NULL;
-    X509_CINF *cert_inf = NULL;
-    STACK_OF(X509_EXTENSION) * ext_list;
 
     // Initialise openSSL
     OpenSSL_add_all_algorithms();
@@ -227,23 +225,19 @@ validate_cert(cert_t* data, int i) {
     }
 
     // Validity Variables
-    int period, names, rsa, key_con;
+    int period, names, rsa, key_con_usage;
 
     // Validations
     period = validate_period(cert);
     rsa = validate_rsa_length(cert, data);
     names = validate_names(cert, data[i].url);
+    key_con_usage = validate_key_usage(cert, data);
+
 
     // If all validates to true, mark the cert as valid
-    if(period * names * rsa) {
+    if(period && names && rsa && key_con_usage) {
         data[i].validate = VALID;
     }
-
-    // Printing certificate information for debugging
-    //print_bio = BIO_new_fp(stdout, BIO_NOCLOSE);
-    //x509_print_ex(, cert, XN_FLAG_COMPAT, X509_FLAG_COMPAT);
-
-
 }
 
 // ----------------------------------------------------------------------
@@ -496,45 +490,86 @@ validate_rsa_length(X509* cert,cert_t *data) {
 int
 validate_key_usage(X509* cert,cert_t *data) {
 
+
     // Constraints and Usage checks
     const char* basic_con = "CA:FALSE";
     const char* enhanced_use = "TLS Web Server Authentication";
 
-    // Check the key and their match their usage
-    int ext_n = -1;
-    int i;
+    int constraint_ok, usage_ok;
 
-    // Get Key usage stack
-    STACK_OF(X509_EXTENSION)* ext = NULL;
-    ext_list = X509_get_ext_d2i(cert, NID_key_usage, NULL, NULL);
+    // Check for Basic Contraints -----------------------------------
+    X509_EXTENSION *ex_bc = X509_get_ext(cert, 
+        X509_get_ext_by_NID(cert, NID_basic_constraints, -1));
 
-    if(!ext_list) {
+    if(!ex_bc) {
         // Handle errors
-        fprintf(stderr, "Error in getting key usage");
+        fprintf(stderr, "Error in getting key constraints");
         exit(EXIT_FAILURE);
     }
 
-    // Get length of the list
-    ext_n = sk_X509_EXTENSION_num(ext_list);
+    constraint_ok = checking_ext(ex_bc, basic_con);
+    printf("CONSTRAINT %d\n", constraint_ok);
 
-    // Loop through the list of extensions
-    for(i=0;i<ext_n;i++) {
-        // Get value of the current extension
-        const X509_EXTENSION curr_ext = sk_X509_EXTENSION_value(ex, i);
-
-        // Convert the value into a string
-        char* ext_string = (char* ) ASN1_STRING_data();
-
-        // Check for the key usages
-        
-
+    // Check for Enhanced Key Usage ---------------------------------
+     X509_EXTENSION *ex_eu = X509_get_ext(cert, 
+        X509_get_ext_by_NID(cert, NID_ext_key_usage, -1));
+    
+    if(!ex_eu) {
+        // Handle errors
+        fprintf(stderr, "Error in getting key constraints");
+        exit(EXIT_FAILURE);
     }
 
+    usage_ok = checking_ext(ex_eu, enhanced_use);
+    printf("USAGE %d\n", usage_ok);
 
+    // Contraint not found
+    return (constraint_ok && usage_ok);
+}
 
+/* Validation of Enhanced Key Usage or Basic Constraints
+ * -----------------------------------------------------
+ * ex: The extension as a x509_EXTENSION file
+ * match_type: The type of extension to be matched as a string
+ *
+ * return: Value of 1 if check was successful or 0 if not 
+ */
+int
+checking_ext(X509_EXTENSION *ex, const char* match_type) {
 
+    // Buffer Memory
+    BUF_MEM *bptr = NULL;
+    char *buf = NULL;
+
+    // Initialise the a new BIO
+    BIO *bio = BIO_new(BIO_s_mem());
+    if (!X509V3_EXT_print(bio, ex, 0, 0)) {
+        fprintf(stderr, "Error in reading extensions");
+    }
+    BIO_flush(bio);
+    BIO_get_mem_ptr(bio, &bptr);
+
+    //bptr->data is not NULL terminated - add null character
+    buf = (char *)malloc((bptr->length + 1) * sizeof(char));
+    memcpy(buf, bptr->data, bptr->length);
+    buf[bptr->length] = '\0';
+    
+    // Check if string is present in the 
+    char* ret  = strstr(buf, match_type);
+
+    if(ret != NULL) {
+        // Basic constraint found!
+        return 1;
+    }
+    
+    // Free BIO
+    BIO_free(bio);
+
+    // Checked string not found
     return 0;
 }
+
+
 
 
 

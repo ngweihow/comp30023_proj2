@@ -8,7 +8,7 @@
 #
 
 CC = gcc
-CFLAGS = -Wall -Wextra -lssl -lcrypto
+CFLAGS = -Wall -lssl -lcrypto
 EXE = certcheck
 OBJ = certcheck.o
 
