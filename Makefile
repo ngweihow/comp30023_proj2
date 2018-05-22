@@ -8,9 +8,9 @@
 #
 
 CC = gcc
-CFLAGS = -Wall -Wextra -lssl -lcrypto
+CFLAGS = -Wall -lssl -lcrypto
 EXE = certcheck
-OBJ = certcheck.o
+OBJ = certcheck.o file_io.o validate_names.o validate_times.o validate_rsa.o validate_con_use.o
 
 $(EXE): $(OBJ)
 	$(CC) -o $(EXE) $(OBJ) $(CFLAGS) 
@@ -20,5 +20,5 @@ clean:
 
 
 scp:
-	scp *.c Makefile ubuntu@115.146.85.92:./comp30023_all/comp30023_p2/
+	scp *.c *.h Makefile ubuntu@115.146.85.92:./comp30023_all/comp30023_p2/
 

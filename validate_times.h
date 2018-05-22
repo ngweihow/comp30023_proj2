@@ -1,4 +1,4 @@
-/*   Certificate Common Name and Subject Alternative Name Checker header
+/*   Validation of Not Before and Not After Times header
      +------------------------------------------------------------------+
      | Project Code for Computer Systems COMP30023 2018 S1              |
      | A simple program to validate TLS certificate files               |
@@ -10,6 +10,4 @@
 
 // ---------------------------------------------------------------------- 
 // Function Declarations
-int validate_names (X509* cert, const char* url);
-int validate_ca(X509* cert, const char* url);
-int validate_san(X509* cert, const char* url);
+int validate_period(X509 *cert);

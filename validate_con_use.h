@@ -1,4 +1,4 @@
-/*   Certificate Common Name and Subject Alternative Name Checker header
+/*   Validation of Basic Key Constraints and Enhanced Key Usage header
      +------------------------------------------------------------------+
      | Project Code for Computer Systems COMP30023 2018 S1              |
      | A simple program to validate TLS certificate files               |
@@ -10,6 +10,5 @@
 
 // ---------------------------------------------------------------------- 
 // Function Declarations
-int validate_names (X509* cert, const char* url);
-int validate_ca(X509* cert, const char* url);
-int validate_san(X509* cert, const char* url);
+int validate_key_usage_cons(X509* cert);
+int checking_ext(X509_EXTENSION *ex, const char* match_type);

@@ -19,7 +19,6 @@
 #include <fnmatch.h>
 
 // Importation of header files
-#include "file_io.h"
 #include "validate_names.h"
 
 // ----------------------------------------------------------------------
