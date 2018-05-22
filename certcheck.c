@@ -194,7 +194,6 @@ validate_cert(cert_t* data, int i) {
     char* path = data[i].file_path;
     char* url = data[i].url;
 
-
     // Initialisation of the certificates 
     BIO *certificate_bio = NULL;
     X509 *cert = NULL;
@@ -236,6 +235,10 @@ validate_cert(cert_t* data, int i) {
     if(period && names && rsa && key_con_usage) {
         data[i].validate = VALID;
     }
+
+    // Free BIO and cert
+    BIO_free_all(certificate_bio);
+    X509_free(cert);
 }
 
 // ----------------------------------------------------------------------
@@ -389,7 +392,10 @@ validate_san(X509* cert, const char* url) {
     
     // Setting variables to help iterate through list of SAN
     int i;
-    int san_n = -1; 
+    int san_n = -1;
+
+    // Return value defaulted to false
+    int ret = 0;
 
     // Get list of all Subject Alternative Names
     STACK_OF(GENERAL_NAME)* san_list = NULL;
@@ -429,12 +435,15 @@ validate_san(X509* cert, const char* url) {
                 !(fnmatch(san_string, url, 0))) {
 
                 // Return 1 if matched
-                return 1;
+                ret = 1;
             }
         }
     }
 
-    return 0;
+    // Free all variables used
+    sk_GENERAL_NAME_pop_free(san_list, GENERAL_NAME_free);
+
+    return ret;
 }
 
 // ----------------------------------------------------------------------
@@ -452,6 +461,9 @@ validate_san(X509* cert, const char* url) {
 int
 validate_rsa_length(X509* cert) {
 
+    // Return value defaulted to false
+    int ret = 0;
+
     // Getting the public key from the certificate
     EVP_PKEY* pkey = X509_get_pubkey(cert);
     if(!pkey && (EVP_PKEY_RSA == pkey->type)) {
@@ -466,12 +478,14 @@ validate_rsa_length(X509* cert) {
 
     // Convert bytes to bits and check
     if((pkey_length * 8) >= MIN_RSA_LEN) {
-        return 1;
+        ret = 1;
     }
 
+    // Free the keys
     RSA_free(rsa_key);
+    EVP_PKEY_free(pkey);
 
-    return 0;
+    return ret;
 }
 
 /* Validation of Key Usage and constraints
@@ -541,22 +555,27 @@ checking_ext(X509_EXTENSION *ex, const char* match_type) {
     }
     BIO_flush(bio);
     BIO_get_mem_ptr(bio, &bptr);
+    BIO_set_close(bio, BIO_NOCLOSE);
 
     //bptr->data is not NULL terminated - add null character
-    buf = (char *)malloc((bptr->length + 1) * sizeof(char));
+    buf = malloc((bptr->length + 1) * sizeof(char));
     memcpy(buf, bptr->data, bptr->length);
     buf[bptr->length] = '\0';
     
     // Check if string is present in the 
     char* ret  = strstr(buf, match_type);
 
+    // Free BIO and buf
+    BUF_MEM_free(bptr);
+    BIO_free_all(bio);
+    free(buf);
+
+    // Return true if check passed
     if(ret != NULL) {
         // Basic constraint found!
         return 1;
     }
     
-    // Free BIO
-    BIO_free(bio);
 
     // Checked string not found
     return 0;
