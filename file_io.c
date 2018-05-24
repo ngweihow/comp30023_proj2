@@ -103,7 +103,7 @@ export_csv(cert_t* data, int n) {
 
     // Handling the file operations
     int i;
-    const char* filename = "sample_output.csv"; 
+    const char* filename = "output.csv"; 
     FILE *fp = fopen(filename, "w+");
 
 
